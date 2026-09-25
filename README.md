@@ -32,7 +32,7 @@ and served with `Cache-Control: no-store`. Never put API secrets in these variab
 ## Build locally
 
 ```sh
-git submodule update --init --recursive
+git submodule update --init -- upstream
 bash scripts/source-archive.sh
 docker build --build-arg UPSTREAM_REVISION="$(git -C upstream rev-parse HEAD)" \
   --build-arg REVISION="$(git rev-parse HEAD)" -t notesnook-web:local .
@@ -52,6 +52,9 @@ Pull requests only build and test. Manual runs publish only from the default bra
 The workflow uses the built-in `GITHUB_TOKEN` with `packages: write`.
 For anonymous image pulls, set the GHCR package visibility to public after its
 first publication. Use a published image digest when you want a fixed version.
+
+Checkout is intentionally non-recursive: the upstream repository contains an
+unrelated nested Git entry without a submodule URL. It is not needed for the web build.
 
 ## Update upstream
 

@@ -20,8 +20,12 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          submodules: recursive
+          submodules: false
           persist-credentials: false
+      # Upstream contains an unrelated gitlink without a .gitmodules entry.
+      # Fetch only our direct submodule, after checkout has removed its credentials.
+      - name: Fetch pinned upstream source
+        run: git submodule update --init --depth=1 -- upstream
       - name: Record revisions
         id: revision
         run: |
@@ -67,3 +71,7 @@ jobs:
             docker tag notesnook-web:test "$IMAGE:$UPSTREAM_TAG"
             docker push "$IMAGE:$UPSTREAM_TAG"
           fi
+      # checkout's post-job credential cleanup recursively inspects submodules.
+      - name: Deinitialize upstream before checkout cleanup
+        if: always()
+        run: git submodule deinit --force -- upstream
