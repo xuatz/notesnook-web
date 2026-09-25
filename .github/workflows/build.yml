@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Build and publish
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Record revisions
+        id: revision
+        run: |
+          echo "upstream=$(git -C upstream rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          upstream_tag=$(bash scripts/upstream-tag.sh)
+          echo "tag=$upstream_tag" >> "$GITHUB_OUTPUT"
+      - name: Package source
+        run: bash scripts/source-archive.sh
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build test image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          tags: notesnook-web:test
+          platforms: linux/amd64
+          build-args: |
+            UPSTREAM_REVISION=${{ steps.revision.outputs.upstream }}
+            REVISION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test
+        run: bash scripts/smoke-test.sh notesnook-web:test
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish tested image
+        if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+        env:
+          IMAGE: ${{ steps.revision.outputs.image }}
+          UPSTREAM_TAG: ${{ steps.revision.outputs.tag }}
+        run: |
+          docker tag notesnook-web:test "$IMAGE:sha-$GITHUB_SHA"
+          docker tag notesnook-web:test "$IMAGE:latest"
+          docker push "$IMAGE:sha-$GITHUB_SHA"
+          docker push "$IMAGE:latest"
+          if [ -n "$UPSTREAM_TAG" ]; then
+            docker tag notesnook-web:test "$IMAGE:$UPSTREAM_TAG"
+            docker push "$IMAGE:$UPSTREAM_TAG"
+          fi

@@ -1,0 +1,24 @@
+--- a/apps/web/src/common/db.ts
++++ b/apps/web/src/common/db.ts
+@@ -30,7 +30,10 @@
+ 
+ function getHostUrl(hostUrl: keyof typeof hosts, defaultUrl: string) {
+   if (IS_TESTING) return defaultUrl;
+-  const envValue = import.meta.env[`NN_${hostUrl}`];
++  const runtimeHosts = (globalThis as typeof globalThis & {
++    __notesnook_hosts__?: Record<string, string>;
++  }).__notesnook_hosts__;
++  const envValue = runtimeHosts?.[hostUrl] || import.meta.env[`NN_${hostUrl}`];
+   return envValue || defaultUrl;
+ }
+ 
+--- a/apps/web/src/index.html
++++ b/apps/web/src/index.html
+@@ -1,6 +1,7 @@
+ <!DOCTYPE html>
+ <html lang="en">
+   <head>
++    <script src="/config.js"></script>
+     <meta charset="utf-8" />
+     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+     <link rel="icon" type="image/png" href="/favicon.png" />
